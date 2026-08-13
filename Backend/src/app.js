@@ -77,9 +77,30 @@ app.get("/note/createNote",async(req,res)=>{
     res.render("notes/createNote");
 })
 
-app.post("/register",(req.res)=>{
-    Author.register(new Author({email:request.body.email}))
-})
+app.post("/register", async (req, res) => {
+    try {
+        const author = await Author.register(
+            new Author({ email: req.body.email }),
+            req.body.password
+        );
+        req.login(author, (err) => {
+            if (err) {
+                console.error(err);
+                return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: "Login after register failed" });
+            }
+            res.status(httpStatus.CREATED).json({ message: "Registered and logged in", author });
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(httpStatus.BAD_REQUEST).json({ message: err.message });
+    }
+});
+
+app.post("/login",passport.authenticate("local",{
+    failureRedirect: "/login",
+}),(req,res)=>{
+    res.status(httpStatus.OK).json({ message: "Logged in", author: req.user });
+});
 
 
 
