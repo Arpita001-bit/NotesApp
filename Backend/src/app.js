@@ -1,7 +1,6 @@
 import express from "express";
 import "dotenv/config";
 import session from "express-session";
-import localStrategy from "passport-local";
 import mongoose from "mongoose";
 import  ejs     from "ejs";
 import {createServer} from "node:http";
@@ -13,6 +12,7 @@ import httpStatus from "http-status";
 import methodOverride from "method-override";
 import passport from "passport";
 import passportLocalMongoose from "passport-local-mongoose";
+import flash from "connect-flash";
 
 const app = express();
 app.use(express.json());
@@ -31,6 +31,11 @@ const connectDB = async () => {
 };
 
 connectDB();
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+}));
 
 
 
@@ -41,15 +46,19 @@ app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "../../frontend/views"));
 app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride("_method"));
+app.use(flash());
 passport.use(Author.createStrategy());
 passport.serializeUser(Author.serializeUser());
 passport.deserializeUser(Author.deserializeUser());
 
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-}));
+function isLoggedIn(req,res,next){
+    if(!req.isAuthenticated()){
+        return res.status(httpStatus.UNAUTHORIZED).json({message:"You must be LOgged In !"});
+    }
+    next();
+}
+
+
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -57,6 +66,13 @@ app.use(passport.session());
 app.use((req, res, next) => {
   res.locals.currentUser = req.user;
   next();
+});
+
+app.use((req,res,next)=>{
+   
+    res.locals.error = req.flash("error");
+    res.locals.success = req.flash("success");
+    next();
 });
 
 
@@ -77,18 +93,19 @@ app.get("/note", async (req, res) => {
      res.status(httpStatus.OK).json(notes);
 });
 
-app.get("/note/:id/updateNotes", async (req, res) => {
+app.get("/note/:id/updateNotes",isLoggedIn, async (req, res) => {
     const note = await Note.findById(req.params.id);
     res.render("notes/updateNotes", { note });
 });
 
-app.get("/note/createNote",async(req,res)=>{
+app.get("/note/createNote",isLoggedIn,async(req,res)=>{
 
     res.render("notes/createNote");
 })
 
 app.get("/createAuthor",async(req,res)=>{
     res.render("author/createAuthor");
+
     
 })
 
@@ -111,10 +128,13 @@ app.post("/register", async (req, res) => {
     }
 });
 
-app.post("/login",passport.authenticate("local",{
+app.post("/login", passport.authenticate("local", {
     failureRedirect: "/login",
-}),(req,res)=>{
-    res.status(httpStatus.OK).json({ message: "Logged in", author: req.user });
+    failureFlash: true,
+}), (req, res) => {
+    const { email } = req.body;
+    req.flash("success", `WELCOME BACK ${email}`);
+    res.redirect("/showNote");
 });
 
 app.post("/logout", (req, res, next) => {
@@ -136,7 +156,7 @@ app.get("/home",(req,res)=>{
     })
 });
 
-app.post("/author",async(req,res)=>{
+app.post("/author",isLoggedIn,async(req,res)=>{
     try{
         const author = await Author.create(req.body);
         
@@ -150,7 +170,7 @@ app.post("/author",async(req,res)=>{
     
 })
 
-app.post("/note/createNote",async(req,res)=>{
+app.post("/note/createNote",isLoggedIn,async(req,res)=>{
     try{
         const note = await Note.create(req.body);
         
@@ -164,12 +184,12 @@ app.post("/note/createNote",async(req,res)=>{
     
 })
 
-app.post("/note/:id",async(req,res)=>{
+app.delete("/note/:id",isLoggedIn,async(req,res)=>{
     await Note.findByIdAndDelete(req.params.id);
     res.redirect("/showNote");
 })
 
-app.put("/note/:id/updateNotes", async (req, res) => {
+app.put("/note/:id/updateNotes", isLoggedIn,async (req, res) => {
     let { id } = req.params;
     await Note.findByIdAndUpdate(id, req.body);
     res.redirect("/showNote");
