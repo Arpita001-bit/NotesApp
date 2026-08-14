@@ -12,17 +12,21 @@ import Author from "./models/author.js";
 import httpStatus from "http-status";
 import methodOverride from "method-override";
 import passport from "passport";
+import passportLocalMongoose from "passport-local-mongoose";
 
 const app = express();
 app.use(express.json());
 
-const connectionDB = async()=>{
-    try{
-        const connectDB = mongoose.connect(process.env.MONGO_URI);
-        console.log(`MONGO connected DB Host : ${connectionDB.connection.host}`);
-    }catch(err){
-          console.log("MongoDB connection faild ." , err.message);
-          process.exit(1);
+const connectDB = async () => {
+    try {
+        const connectionDB = await mongoose.connect(process.env.MONGO_URI);
+
+        console.log(
+            `MONGO connected DB Host: ${connectionDB.connection.host}`
+        );
+    } catch (err) {
+        console.log("MongoDB connection failed:", err.message);
+        process.exit(1);
     }
 };
 
@@ -48,6 +52,12 @@ app.use(session({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+
+
+app.use((req, res, next) => {
+  res.locals.currentUser = req.user;
+  next();
+});
 
 
 
@@ -77,6 +87,11 @@ app.get("/note/createNote",async(req,res)=>{
     res.render("notes/createNote");
 })
 
+app.get("/createAuthor",async(req,res)=>{
+    res.render("author/createAuthor");
+    
+})
+
 app.post("/register", async (req, res) => {
     try {
         const author = await Author.register(
@@ -102,6 +117,17 @@ app.post("/login",passport.authenticate("local",{
     res.status(httpStatus.OK).json({ message: "Logged in", author: req.user });
 });
 
+app.post("/logout", (req, res, next) => {
+  req.logout((err) => {
+    if (err) return next(err);
+    res.status(httpStatus.OK).json({ message: "Logged out" });
+  });
+});
+
+app.get("/login", (req, res) => {
+    res.render("author/login"); 
+});
+
 
 
 app.get("/home",(req,res)=>{
@@ -113,12 +139,15 @@ app.get("/home",(req,res)=>{
 app.post("/author",async(req,res)=>{
     try{
         const author = await Author.create(req.body);
-        res.status(httpStatus.CREATED).json(author);
+        
+        res.redirect("/showNote");
     }catch(err){
         console.error(err);
         res.status(httpStatus.BAD_REQUEST).json({ message: "Author creation failed" });
         
     }
+
+    
 })
 
 app.post("/note/createNote",async(req,res)=>{

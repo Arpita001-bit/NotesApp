@@ -1,5 +1,7 @@
 import mongoose,{ Schema } from "mongoose";
-import passportLocalMongoose from "passport-local-mongoose";
+import passportLocalMongoosePackage from "passport-local-mongoose";
+
+const passportLocalMongoose = passportLocalMongoosePackage.default;
 
 
 const authorSchema = new Schema({
