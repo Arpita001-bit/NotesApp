@@ -35,6 +35,13 @@ app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
+  cookie:{
+    httpOnly :true,
+    secure : false,
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+
+
+  }
 }));
 
 
@@ -58,6 +65,21 @@ function isLoggedIn(req,res,next){
     next();
 }
 
+async function isAuthor(req, res, next) {
+    let { id } = req.params;
+    let note = await Note.findById(id);   // 1. needs `async` + `await` — without it, `note` is a pending Promise, not the document
+
+    if (!note) {
+        req.flash("error", "Note not found");
+        return res.redirect("/showNote");
+    }
+
+    if (note.author !== req.user._id.toString()) {
+    req.flash("error", "You are not the owner of this Note");
+    return res.redirect("/showNote");
+}
+next();
+}
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -98,7 +120,7 @@ app.get("/note/:id/updateNotes",isLoggedIn, async (req, res) => {
     res.render("notes/updateNotes", { note });
 });
 
-app.get("/note/createNote",isLoggedIn,async(req,res)=>{
+app.get("/note/createNote",isLoggedIn,isAuthor,async(req,res)=>{
 
     res.render("notes/createNote");
 })
@@ -120,7 +142,9 @@ app.post("/register", async (req, res) => {
                 console.error(err);
                 return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: "Login after register failed" });
             }
-            res.status(httpStatus.CREATED).json({ message: "Registered and logged in", author });
+            console.log(req.user);
+            req.flash("success", `${author} Registered and logged in`);
+            res.redirect("/showNote");
         });
     } catch (err) {
         console.error(err);
@@ -133,6 +157,7 @@ app.post("/login", passport.authenticate("local", {
     failureFlash: true,
 }), (req, res) => {
     const { email } = req.body;
+    console.log(req.user);
     req.flash("success", `WELCOME BACK ${email}`);
     res.redirect("/showNote");
 });
@@ -170,9 +195,10 @@ app.post("/author",isLoggedIn,async(req,res)=>{
     
 })
 
-app.post("/note/createNote",isLoggedIn,async(req,res)=>{
+app.post("/note/createNote",isLoggedIn,isAuthor,async(req,res)=>{
     try{
         const note = await Note.create(req.body);
+        console.log(req.note);
         
         res.redirect("/showNote");
     }catch(err){
@@ -184,7 +210,7 @@ app.post("/note/createNote",isLoggedIn,async(req,res)=>{
     
 })
 
-app.delete("/note/:id",isLoggedIn,async(req,res)=>{
+app.delete("/note/:id",isLoggedIn,isAuthor,async(req,res)=>{
     await Note.findByIdAndDelete(req.params.id);
     res.redirect("/showNote");
 })
