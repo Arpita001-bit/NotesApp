@@ -12,6 +12,7 @@ import httpStatus from "http-status";
 import methodOverride from "method-override";
 import passport from "passport";
 import passportLocalMongoose from "passport-local-mongoose";
+import ejsMate from "ejs-mate";
 import flash from "connect-flash";
 
 const app = express();
@@ -50,7 +51,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.set("view engine", "ejs");
-app.set("views", path.join(__dirname, "../../frontend/views"));
+
+app.engine("ejs", ejsMate);
+app.set("views", path.join(__dirname, "../../Frontend/views"));
+app.use(express.static(path.join(__dirname, "../../public")));
 app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride("_method"));
 app.use(flash());
@@ -58,27 +62,34 @@ passport.use(Author.createStrategy());
 passport.serializeUser(Author.serializeUser());
 passport.deserializeUser(Author.deserializeUser());
 
+// function isLoggedIn(req,res,next){
+//     if(!req.isAuthenticated()){
+//         return res.status(httpStatus.UNAUTHORIZED).json({message:"You must be LOgged In !"});
+//     }
+//     next();
+// }
 function isLoggedIn(req,res,next){
     if(!req.isAuthenticated()){
-        return res.status(httpStatus.UNAUTHORIZED).json({message:"You must be LOgged In !"});
+        req.flash("error", "You must be logged in first");
+        return res.redirect("/login");
     }
     next();
 }
 
 async function isAuthor(req, res, next) {
     let { id } = req.params;
-    let note = await Note.findById(id);   // 1. needs `async` + `await` — without it, `note` is a pending Promise, not the document
+    let note = await Note.findById(id);
 
     if (!note) {
         req.flash("error", "Note not found");
         return res.redirect("/showNote");
     }
 
-    if (note.author !== req.user._id.toString()) {
-    req.flash("error", "You are not the owner of this Note");
-    return res.redirect("/showNote");
-}
-next();
+    if (!note.owner || note.owner.toString() !== req.user._id.toString()) {
+        req.flash("error", "You are not the owner of this Note");
+        return res.redirect("/showNote");
+    }
+    next();
 }
 
 app.use(passport.initialize());
@@ -120,9 +131,10 @@ app.get("/note/:id/updateNotes",isLoggedIn, async (req, res) => {
     res.render("notes/updateNotes", { note });
 });
 
-app.get("/note/createNote",isLoggedIn,isAuthor,async(req,res)=>{
+app.get("/note/createNote",isLoggedIn,async(req,res)=>{
 
     res.render("notes/createNote");
+    
 })
 
 app.get("/createAuthor",async(req,res)=>{
@@ -195,7 +207,7 @@ app.post("/author",isLoggedIn,async(req,res)=>{
     
 })
 
-app.post("/note/createNote",isLoggedIn,isAuthor,async(req,res)=>{
+app.post("/note/createNote",isLoggedIn,async(req,res)=>{
     try{
         const note = await Note.create(req.body);
         console.log(req.note);

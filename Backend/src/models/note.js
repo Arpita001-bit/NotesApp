@@ -12,6 +12,11 @@ const notesSchema = new Schema({
     author:{
         type:String,
         required:true,
+    },
+
+    owner:{
+        type: Schema.Types.ObjectId,
+        ref: "Author",
     }
 })
 
